@@ -1,0 +1,32 @@
+{
+  "name": "@meeting-assistant/api",
+  "version": "0.0.1",
+  "private": true,
+  "type": "module",
+  "main": "dist/server.js",
+  "prettier": "@meeting-assistant/config/prettier",
+  "scripts": {
+    "dev": "tsx watch src/server.ts",
+    "build": "tsc",
+    "start": "node dist/server.js",
+    "type-check": "tsc --noEmit",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json}\"",
+    "format:check": "prettier --check \"src/**/*.{ts,tsx,json}\"",
+    "lint": "eslint \"src/**/*.{ts,tsx}\"",
+    "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix"
+  },
+  "dependencies": {
+    "express": "^4.21.2",
+    "@meeting-assistant/shared": "*",
+    "@meeting-assistant/database": "*"
+  },
+  "devDependencies": {
+    "@types/express": "^5.0.0",
+    "@types/node": "^20.17.0",
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2",
+    "@meeting-assistant/config": "*",
+    "prettier": "^3.3.3",
+    "eslint": "^9.18.0"
+  }
+}
