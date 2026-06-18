@@ -11,7 +11,16 @@
     "dev": "turbo run dev",
     "build": "turbo run build",
     "lint": "turbo run lint",
-    "test": "turbo run test"
+    "test": "turbo run test",
+    "format": "turbo run format",
+    "format:check": "turbo run format:check",
+    "type-check": "turbo run type-check",
+    "db:up": "docker compose up -d",
+    "db:down": "docker compose down",
+    "db:logs": "docker compose logs -f",
+    "db:reset": "docker compose down -v && docker compose up -d",
+    "db:psql": "docker exec -it meeting_assistant_postgres psql -U meeting_assistant -d meeting_assistant_dev",
+    "db:redis": "docker exec -it meeting_assistant_redis redis-cli"
   },
   "devDependencies": {
     "turbo": "^2.0.0"
