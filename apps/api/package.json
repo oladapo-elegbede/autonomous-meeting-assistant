@@ -16,17 +16,19 @@
     "lint:fix": "eslint \"src/**/*.{ts,tsx}\" --fix"
   },
   "dependencies": {
-    "express": "^4.21.2",
+    "@meeting-assistant/database": "*",
     "@meeting-assistant/shared": "*",
-    "@meeting-assistant/database": "*"
+    "dotenv": "^17.4.2",
+    "express": "^4.21.2",
+    "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@meeting-assistant/config": "*",
     "@types/express": "^5.0.0",
     "@types/node": "^20.17.0",
-    "tsx": "^4.19.2",
-    "typescript": "^5.7.2",
-    "@meeting-assistant/config": "*",
+    "eslint": "^9.18.0",
     "prettier": "^3.3.3",
-    "eslint": "^9.18.0"
+    "tsx": "^4.19.2",
+    "typescript": "^5.7.2"
   }
 }
