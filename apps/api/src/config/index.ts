@@ -39,9 +39,12 @@ function loadConfig() {
   const result = envSchema.safeParse(process.env);
 
   if (!result.success) {
-    console.error('Invalid environment configuration:');
-    console.error(result.error.flatten().fieldErrors);
-    process.exit(1);
+    const errors = result.error.flatten().fieldErrors;
+    const formatted = Object.entries(errors)
+      .map(([key, messages]) => `  ${key}: ${messages?.join(', ')}`)
+      .join('\n');
+
+    throw new Error(`Invalid environment configuration:\n${formatted}`);
   }
 
   return result.data;
