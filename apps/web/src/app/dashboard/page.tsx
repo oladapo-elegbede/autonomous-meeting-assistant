@@ -25,7 +25,8 @@ export default async function DashboardPage() {
             Welcome{user?.firstName ? `, ${user.firstName}` : ''}
           </h2>
           <p className="text-gray-600">
-            You are signed in as <span className="font-mono">{user?.emailAddresses[0]?.emailAddress}</span>
+            You are signed in as{' '}
+            <span className="font-mono">{user?.emailAddresses[0]?.emailAddress}</span>
           </p>
           <p className="mt-4 text-sm text-gray-500">
             This is a temporary placeholder. The real dashboard is built in Phase 4.
