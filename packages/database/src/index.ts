@@ -1,14 +1,17 @@
 /**
- * Database package.
+ * Public API of the @meeting-assistant/database package.
  *
- * This package will contain:
- * - PostgreSQL connection client with pooling
- * - Type-safe query builder (Kysely)
- * - Database migrations
- * - Repository functions for each entity
- *
- * Currently a placeholder. Real implementation begins in Phase 5
- * when we set up PostgreSQL and define the schema.
+ * This is the only file other packages should import from.
+ * Internal modules (connection, client, types) are exposed here
+ * so consumers do not need to know the internal file structure.
  */
 
-export const DATABASE_PACKAGE_VERSION = '0.0.1';
+export { createPool, type DatabasePool } from './connection.js';
+export { createDatabaseClient, type DatabaseClient } from './client.js';
+export type {
+  Database,
+  UsersTable,
+  OrganizationsTable,
+  OrganizationMembersTable,
+  OrganizationRole,
+} from './types.js';
