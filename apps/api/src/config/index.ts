@@ -29,6 +29,16 @@ const envSchema = z.object({
 
   // Logging
   LOG_LEVEL: z.enum(['fatal', 'error', 'warn', 'info', 'debug', 'trace']).default('info'),
+
+  // Clerk Authentication
+  CLERK_PUBLISHABLE_KEY: z
+    .string()
+    .min(1, 'CLERK_PUBLISHABLE_KEY is required')
+    .startsWith('pk_', 'Clerk publishable key must start with pk_'),
+  CLERK_SECRET_KEY: z
+    .string()
+    .min(1, 'CLERK_SECRET_KEY is required')
+    .startsWith('sk_', 'Clerk secret key must start with sk_'),
 });
 
 /**
@@ -85,6 +95,11 @@ export const config = {
 
   logging: {
     level: env.LOG_LEVEL,
+  },
+
+  clerk: {
+    publishableKey: env.CLERK_PUBLISHABLE_KEY,
+    secretKey: env.CLERK_SECRET_KEY,
   },
 } as const;
 
