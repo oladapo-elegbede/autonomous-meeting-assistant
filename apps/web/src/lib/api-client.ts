@@ -61,8 +61,7 @@ export const apiClient = {
   patch: <T>(path: string, body?: unknown, token?: string) =>
     request<T>(path, { method: 'PATCH', body, token }),
 
-  delete: <T>(path: string, token?: string) =>
-    request<T>(path, { method: 'DELETE', token }),
+  delete: <T>(path: string, token?: string) => request<T>(path, { method: 'DELETE', token }),
 };
 
 export { ApiError };
