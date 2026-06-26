@@ -1,15 +1,16 @@
 import { Router, type Request, type Response } from 'express';
 import express from 'express';
 import { Webhook } from 'svix';
+import type { OrganizationRole } from '@meeting-assistant/database';
 import { config } from '../config/index.js';
 import { db } from '../db/index.js';
 
 const router = Router();
 
-/**
- * Type definitions for Clerk webhook events we care about.
- * Clerk sends much more data than this — we narrow to what we need.
- */
+// ============================================================
+// Clerk webhook event types
+// ============================================================
+
 type ClerkEmailAddress = {
   id: string;
   email_address: string;
@@ -24,7 +25,22 @@ type ClerkUserData = {
   image_url: string | null;
 };
 
-type ClerkUserCreatedEvent = {
+type ClerkOrganizationData = {
+  id: string;
+  name: string;
+  slug: string | null;
+  image_url: string | null;
+  logo_url: string | null;
+};
+
+type ClerkOrganizationMembershipData = {
+  id: string;
+  organization: { id: string };
+  public_user_data: { user_id: string };
+  role: string;
+};
+
+type ClerkUserEvent = {
   type: 'user.created' | 'user.updated';
   data: ClerkUserData;
 };
@@ -34,12 +50,38 @@ type ClerkUserDeletedEvent = {
   data: { id: string; deleted: boolean };
 };
 
-type ClerkEvent = ClerkUserCreatedEvent | ClerkUserDeletedEvent;
+type ClerkOrganizationEvent = {
+  type: 'organization.created' | 'organization.updated';
+  data: ClerkOrganizationData;
+};
 
-/**
- * Returns the user's primary email address.
- * Clerk allows multiple email addresses per user; we pick the primary one.
- */
+type ClerkOrganizationDeletedEvent = {
+  type: 'organization.deleted';
+  data: { id: string; deleted: boolean };
+};
+
+type ClerkMembershipEvent = {
+  type: 'organizationMembership.created' | 'organizationMembership.updated';
+  data: ClerkOrganizationMembershipData;
+};
+
+type ClerkMembershipDeletedEvent = {
+  type: 'organizationMembership.deleted';
+  data: ClerkOrganizationMembershipData;
+};
+
+type ClerkEvent =
+  | ClerkUserEvent
+  | ClerkUserDeletedEvent
+  | ClerkOrganizationEvent
+  | ClerkOrganizationDeletedEvent
+  | ClerkMembershipEvent
+  | ClerkMembershipDeletedEvent;
+
+// ============================================================
+// User helpers
+// ============================================================
+
 function getPrimaryEmail(data: ClerkUserData): string | null {
   if (!data.primary_email_address_id) {
     return data.email_addresses[0]?.email_address ?? null;
@@ -49,22 +91,11 @@ function getPrimaryEmail(data: ClerkUserData): string | null {
   );
 }
 
-/**
- * Builds the full name from first_name and last_name.
- * Returns null if both are missing.
- */
 function buildFullName(data: ClerkUserData): string | null {
   const parts = [data.first_name, data.last_name].filter(Boolean);
   return parts.length > 0 ? parts.join(' ') : null;
 }
 
-/**
- * Upserts a user in our database based on Clerk's user data.
- * "Upsert" means: insert if new, update if existing.
- *
- * We use clerk_user_id as the conflict target because that is the
- * unique identifier linking Clerk to our database.
- */
 async function syncUser(data: ClerkUserData): Promise<void> {
   const email = getPrimaryEmail(data);
 
@@ -91,30 +122,136 @@ async function syncUser(data: ClerkUserData): Promise<void> {
     .execute();
 }
 
-/**
- * Soft handling of user deletion.
- *
- * For now we hard-delete from our users table. When we add features
- * with foreign keys (meetings, action items), we may need to switch
- * to soft-delete to preserve historical data.
- */
 async function deleteUser(clerkUserId: string): Promise<void> {
   await db.deleteFrom('users').where('clerk_user_id', '=', clerkUserId).execute();
 }
 
+// ============================================================
+// Organization helpers
+// ============================================================
+
+async function syncOrganization(data: ClerkOrganizationData): Promise<void> {
+  if (!data.slug) {
+    throw new Error(`Clerk organization ${data.id} has no slug`);
+  }
+
+  // Hoist into a local so TypeScript narrows the type for the entire function
+  const slug = data.slug;
+  const logoUrl = data.logo_url ?? data.image_url;
+
+  await db
+    .insertInto('organizations')
+    .values({
+      clerk_org_id: data.id,
+      name: data.name,
+      slug,
+      logo_url: logoUrl,
+    })
+    .onConflict((oc) =>
+      oc.column('clerk_org_id').doUpdateSet({
+        name: data.name,
+        slug,
+        logo_url: logoUrl,
+        updated_at: new Date(),
+      }),
+    )
+    .execute();
+}
+
+async function deleteOrganization(clerkOrgId: string): Promise<void> {
+  await db.deleteFrom('organizations').where('clerk_org_id', '=', clerkOrgId).execute();
+}
+
+// ============================================================
+// Membership helpers
+// ============================================================
+
 /**
- * POST /api/webhooks/clerk
- *
- * Receives webhook events from Clerk and syncs them to our database.
- *
- * Important: this route uses express.raw() instead of express.json() because
- * svix signature verification requires the raw, unparsed request body.
+ * Maps Clerk's role identifiers to our internal role names.
+ * Clerk uses "org:admin" and "org:member" by default.
  */
+function mapClerkRole(clerkRole: string): OrganizationRole {
+  const normalized = clerkRole.toLowerCase();
+  if (normalized.includes('admin')) return 'admin';
+  if (normalized.includes('owner')) return 'owner';
+  if (normalized.includes('viewer')) return 'viewer';
+  return 'member';
+}
+
+async function syncMembership(data: ClerkOrganizationMembershipData): Promise<void> {
+  // Resolve internal IDs from Clerk IDs
+  const org = await db
+    .selectFrom('organizations')
+    .select('id')
+    .where('clerk_org_id', '=', data.organization.id)
+    .executeTakeFirst();
+
+  const user = await db
+    .selectFrom('users')
+    .select('id')
+    .where('clerk_user_id', '=', data.public_user_data.user_id)
+    .executeTakeFirst();
+
+  if (!org || !user) {
+    // The org or user webhook may not have arrived yet. Skip silently —
+    // Clerk will retry, and by then the dependency should exist.
+    console.warn(
+      `Skipping membership sync: missing org (${data.organization.id}) or user (${data.public_user_data.user_id})`,
+    );
+    return;
+  }
+
+  const role = mapClerkRole(data.role);
+
+  await db
+    .insertInto('organization_members')
+    .values({
+      organization_id: org.id,
+      user_id: user.id,
+      role,
+      joined_at: new Date(),
+    })
+    .onConflict((oc) =>
+      oc.columns(['organization_id', 'user_id']).doUpdateSet({
+        role,
+        updated_at: new Date(),
+      }),
+    )
+    .execute();
+}
+
+async function deleteMembership(data: ClerkOrganizationMembershipData): Promise<void> {
+  const org = await db
+    .selectFrom('organizations')
+    .select('id')
+    .where('clerk_org_id', '=', data.organization.id)
+    .executeTakeFirst();
+
+  const user = await db
+    .selectFrom('users')
+    .select('id')
+    .where('clerk_user_id', '=', data.public_user_data.user_id)
+    .executeTakeFirst();
+
+  if (!org || !user) {
+    return;
+  }
+
+  await db
+    .deleteFrom('organization_members')
+    .where('organization_id', '=', org.id)
+    .where('user_id', '=', user.id)
+    .execute();
+}
+
+// ============================================================
+// Webhook route
+// ============================================================
+
 router.post(
   '/clerk',
   express.raw({ type: 'application/json' }),
   async (req: Request, res: Response) => {
-    // Verify the webhook signature using svix
     const svixId = req.header('svix-id');
     const svixTimestamp = req.header('svix-timestamp');
     const svixSignature = req.header('svix-signature');
@@ -151,7 +288,6 @@ router.post(
       return;
     }
 
-    // Process the verified event
     try {
       switch (event.type) {
         case 'user.created':
@@ -165,8 +301,33 @@ router.post(
           console.log(`Deleted Clerk user: ${event.data.id}`);
           break;
 
+        case 'organization.created':
+        case 'organization.updated':
+          await syncOrganization(event.data);
+          console.log(`Synced Clerk organization: ${event.data.id} (${event.type})`);
+          break;
+
+        case 'organization.deleted':
+          await deleteOrganization(event.data.id);
+          console.log(`Deleted Clerk organization: ${event.data.id}`);
+          break;
+
+        case 'organizationMembership.created':
+        case 'organizationMembership.updated':
+          await syncMembership(event.data);
+          console.log(
+            `Synced Clerk membership: org=${event.data.organization.id} user=${event.data.public_user_data.user_id}`,
+          );
+          break;
+
+        case 'organizationMembership.deleted':
+          await deleteMembership(event.data);
+          console.log(
+            `Deleted Clerk membership: org=${event.data.organization.id} user=${event.data.public_user_data.user_id}`,
+          );
+          break;
+
         default:
-          // Unknown event type — log and ignore (do not error out)
           console.log(`Ignoring unknown Clerk event type: ${(event as { type: string }).type}`);
       }
     } catch (err) {

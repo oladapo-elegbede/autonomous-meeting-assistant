@@ -56,7 +56,7 @@ export type OrganizationsTable = {
   name: string;
   slug: string;
   logo_url: string | null;
-  plan: string;
+  plan: ColumnType<string, string | undefined, string>;
   created_at: GeneratedTimestamp;
   updated_at: GeneratedTimestamp;
 };

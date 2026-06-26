@@ -1,4 +1,5 @@
 import { clerkMiddleware, createRouteMatcher } from '@clerk/nextjs/server';
+import { NextResponse } from 'next/server';
 
 /**
  * Public routes that do NOT require authentication.
@@ -14,21 +15,42 @@ const isPublicRoute = createRouteMatcher([
   '/api/webhooks/(.*)',
 ]);
 
+/**
+ * Routes that authenticated users can access even without
+ * belonging to an organization. The onboarding flow itself
+ * must be reachable so users can create their first org.
+ */
+const isOnboardingRoute = createRouteMatcher(['/onboarding(.*)']);
+
 export default clerkMiddleware(async (auth, request) => {
-  if (!isPublicRoute(request)) {
-    await auth.protect();
+  // 1. Allow public routes through without any checks
+  if (isPublicRoute(request)) {
+    return NextResponse.next();
   }
+
+  // 2. Require authentication for everything else
+  const { userId, orgId } = await auth();
+
+  if (!userId) {
+    await auth.protect();
+    return NextResponse.next();
+  }
+
+  // 3. Authenticated but no organization → send to onboarding
+  //    (unless they are already on the onboarding flow)
+  if (!orgId && !isOnboardingRoute(request)) {
+    return NextResponse.redirect(new URL('/onboarding', request.url));
+  }
+
+  // 4. Authenticated user trying to revisit onboarding when they
+  //    already have an org → send them to the dashboard instead
+  if (orgId && isOnboardingRoute(request)) {
+    return NextResponse.redirect(new URL('/dashboard', request.url));
+  }
+
+  return NextResponse.next();
 });
 
-/**
- * The matcher tells Next.js which routes should run through this middleware.
- *
- * The pattern below matches everything EXCEPT:
- *  - Next.js internal files (_next, static assets)
- *  - Common static file extensions
- *
- * Always include API routes so authentication is enforced there too.
- */
 export const config = {
   matcher: [
     // Skip Next.js internals and static files
