@@ -1,10 +1,11 @@
 import 'dotenv/config';
-import express, { type Request, type Response, type NextFunction } from 'express';
+import express, { type Request, type Response } from 'express';
 import cors from 'cors';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { APP_NAME, APP_VERSION, type ApiResponse } from '@meeting-assistant/shared';
 import { config } from './config/index.js';
 import { clerkWebhookRouter } from './webhooks/clerk.webhook.js';
+import { requireAuth, requireOrg, requireRole } from './middleware/auth.middleware.js';
 
 const app = express();
 
@@ -23,8 +24,6 @@ app.use(
 // ============================================================
 // Webhook routes — MUST be registered BEFORE express.json()
 // ============================================================
-// Svix signature verification requires the raw request body.
-// If express.json() ran first, the raw bytes would be gone.
 app.use('/api/webhooks', clerkWebhookRouter);
 
 // ============================================================
@@ -41,26 +40,6 @@ app.use(
     secretKey: config.clerk.secretKey,
   }),
 );
-
-// ============================================================
-// Custom requireAuth middleware
-// ============================================================
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  const auth = getAuth(req);
-
-  if (!auth.userId) {
-    res.status(401).json({
-      success: false,
-      error: {
-        code: 'UNAUTHENTICATED',
-        message: 'Authentication required to access this resource.',
-      },
-    });
-    return;
-  }
-
-  next();
-}
 
 // ============================================================
 // PUBLIC routes — no authentication required
@@ -90,14 +69,20 @@ app.get('/health', (_req: Request, res: Response) => {
 });
 
 // ============================================================
-// PROTECTED routes — require valid Clerk session
+// PROTECTED routes
 // ============================================================
 
 type WhoAmIData = {
   userId: string;
   sessionId: string | null;
+  orgId: string | null | undefined;
+  orgRole: string | null | undefined;
 };
 
+/**
+ * Returns the current authenticated user's session data.
+ * Requires sign-in but does not require an organization.
+ */
 app.get('/api/v1/me', requireAuth, (req: Request, res: Response) => {
   const auth = getAuth(req);
 
@@ -106,6 +91,56 @@ app.get('/api/v1/me', requireAuth, (req: Request, res: Response) => {
     data: {
       userId: auth.userId!,
       sessionId: auth.sessionId,
+      orgId: auth.orgId,
+      orgRole: auth.orgRole,
+    },
+  };
+
+  res.status(200).json(response);
+});
+
+/**
+ * Test endpoint that requires the user to be in an organization.
+ * Useful for verifying the requireOrg middleware.
+ */
+type WorkspaceContextData = {
+  userId: string;
+  orgId: string;
+  orgRole: string;
+};
+
+app.get('/api/v1/workspace/context', requireOrg, (req: Request, res: Response) => {
+  const auth = getAuth(req);
+
+  const response: ApiResponse<WorkspaceContextData> = {
+    success: true,
+    data: {
+      userId: auth.userId!,
+      orgId: auth.orgId!,
+      orgRole: auth.orgRole ?? 'unknown',
+    },
+  };
+
+  res.status(200).json(response);
+});
+
+/**
+ * Test endpoint that requires admin role.
+ * Only admins and owners can call this.
+ */
+type AdminCheckData = {
+  message: string;
+  role: string;
+};
+
+app.get('/api/v1/admin/check', requireRole('admin'), (req: Request, res: Response) => {
+  const auth = getAuth(req);
+
+  const response: ApiResponse<AdminCheckData> = {
+    success: true,
+    data: {
+      message: 'Admin access confirmed.',
+      role: auth.orgRole ?? 'unknown',
     },
   };
 
