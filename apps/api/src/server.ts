@@ -4,14 +4,13 @@ import cors from 'cors';
 import { clerkMiddleware, getAuth } from '@clerk/express';
 import { APP_NAME, APP_VERSION, type ApiResponse } from '@meeting-assistant/shared';
 import { config } from './config/index.js';
+import { clerkWebhookRouter } from './webhooks/clerk.webhook.js';
 
 const app = express();
 
 // ============================================================
 // CORS — controls which origins can call our API
 // ============================================================
-// Browsers block cross-origin requests by default. We explicitly
-// allow the origins listed in CORS_ORIGINS env var.
 app.use(
   cors({
     origin: config.cors.origins,
@@ -21,6 +20,16 @@ app.use(
   }),
 );
 
+// ============================================================
+// Webhook routes — MUST be registered BEFORE express.json()
+// ============================================================
+// Svix signature verification requires the raw request body.
+// If express.json() ran first, the raw bytes would be gone.
+app.use('/api/webhooks', clerkWebhookRouter);
+
+// ============================================================
+// JSON body parsing for all other routes
+// ============================================================
 app.use(express.json());
 
 // ============================================================
