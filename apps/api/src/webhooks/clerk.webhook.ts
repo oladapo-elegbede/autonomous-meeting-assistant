@@ -172,14 +172,19 @@ async function deleteOrganization(clerkOrgId: string): Promise<void> {
  */
 function mapClerkRole(clerkRole: string): OrganizationRole {
   const normalized = clerkRole.toLowerCase();
-  if (normalized.includes('admin')) return 'admin';
-  if (normalized.includes('owner')) return 'owner';
-  if (normalized.includes('viewer')) return 'viewer';
+  if (normalized.includes('admin')) {
+    return 'admin';
+  }
+  if (normalized.includes('owner')) {
+    return 'owner';
+  }
+  if (normalized.includes('viewer')) {
+    return 'viewer';
+  }
   return 'member';
 }
 
 async function syncMembership(data: ClerkOrganizationMembershipData): Promise<void> {
-  // Resolve internal IDs from Clerk IDs
   const org = await db
     .selectFrom('organizations')
     .select('id')
@@ -293,42 +298,42 @@ router.post(
         case 'user.created':
         case 'user.updated':
           await syncUser(event.data);
-          console.log(`Synced Clerk user: ${event.data.id} (${event.type})`);
+          console.warn(`Synced Clerk user: ${event.data.id} (${event.type})`);
           break;
 
         case 'user.deleted':
           await deleteUser(event.data.id);
-          console.log(`Deleted Clerk user: ${event.data.id}`);
+          console.warn(`Deleted Clerk user: ${event.data.id}`);
           break;
 
         case 'organization.created':
         case 'organization.updated':
           await syncOrganization(event.data);
-          console.log(`Synced Clerk organization: ${event.data.id} (${event.type})`);
+          console.warn(`Synced Clerk organization: ${event.data.id} (${event.type})`);
           break;
 
         case 'organization.deleted':
           await deleteOrganization(event.data.id);
-          console.log(`Deleted Clerk organization: ${event.data.id}`);
+          console.warn(`Deleted Clerk organization: ${event.data.id}`);
           break;
 
         case 'organizationMembership.created':
         case 'organizationMembership.updated':
           await syncMembership(event.data);
-          console.log(
+          console.warn(
             `Synced Clerk membership: org=${event.data.organization.id} user=${event.data.public_user_data.user_id}`,
           );
           break;
 
         case 'organizationMembership.deleted':
           await deleteMembership(event.data);
-          console.log(
+          console.warn(
             `Deleted Clerk membership: org=${event.data.organization.id} user=${event.data.public_user_data.user_id}`,
           );
           break;
 
         default:
-          console.log(`Ignoring unknown Clerk event type: ${(event as { type: string }).type}`);
+          console.warn(`Ignoring unknown Clerk event type: ${(event as { type: string }).type}`);
       }
     } catch (err) {
       console.error('Error processing Clerk webhook', err);

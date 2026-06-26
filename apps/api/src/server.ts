@@ -113,5 +113,7 @@ app.get('/api/v1/me', requireAuth, (req: Request, res: Response) => {
 });
 
 app.listen(config.server.port, () => {
-  console.log(`API server running in ${config.env} mode on http://localhost:${config.server.port}`);
+  console.warn(
+    `API server running in ${config.env} mode on http://localhost:${config.server.port}`,
+  );
 });
