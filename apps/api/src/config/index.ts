@@ -43,6 +43,17 @@ const envSchema = z.object({
     .string()
     .min(1, 'CLERK_WEBHOOK_SECRET is required')
     .startsWith('whsec_', 'Clerk webhook secret must start with whsec_'),
+
+  // Supabase Storage
+  SUPABASE_URL: z.string().url('SUPABASE_URL must be a valid HTTPS URL'),
+  SUPABASE_SERVICE_ROLE_KEY: z
+    .string()
+    .min(1, 'SUPABASE_SERVICE_ROLE_KEY is required')
+    .startsWith('eyJ', 'Service role key must be a valid JWT (starts with eyJ)'),
+  SUPABASE_STORAGE_BUCKET: z.string().min(1).default('meetings'),
+
+  // Upload limits
+  MAX_UPLOAD_SIZE_MB: z.coerce.number().int().positive().default(50),
 });
 
 /**
@@ -105,6 +116,17 @@ export const config = {
     publishableKey: env.CLERK_PUBLISHABLE_KEY,
     secretKey: env.CLERK_SECRET_KEY,
     webhookSecret: env.CLERK_WEBHOOK_SECRET,
+  },
+
+  supabase: {
+    url: env.SUPABASE_URL,
+    serviceRoleKey: env.SUPABASE_SERVICE_ROLE_KEY,
+    storageBucket: env.SUPABASE_STORAGE_BUCKET,
+  },
+
+  upload: {
+    maxSizeMb: env.MAX_UPLOAD_SIZE_MB,
+    maxSizeBytes: env.MAX_UPLOAD_SIZE_MB * 1024 * 1024,
   },
 } as const;
 

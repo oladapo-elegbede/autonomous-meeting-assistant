@@ -5,6 +5,7 @@ import { clerkMiddleware, getAuth } from '@clerk/express';
 import { APP_NAME, APP_VERSION, type ApiResponse } from '@meeting-assistant/shared';
 import { config } from './config/index.js';
 import { clerkWebhookRouter } from './webhooks/clerk.webhook.js';
+import { meetingsRouter } from './modules/meetings/meetings.router.js';
 import { requireAuth, requireOrg, requireRole } from './middleware/auth.middleware.js';
 
 const app = express();
@@ -40,6 +41,11 @@ app.use(
     secretKey: config.clerk.secretKey,
   }),
 );
+
+// ============================================================
+// Meetings module
+// ============================================================
+app.use('/api/v1/meetings', meetingsRouter);
 
 // ============================================================
 // PUBLIC routes — no authentication required
@@ -79,10 +85,6 @@ type WhoAmIData = {
   orgRole: string | null | undefined;
 };
 
-/**
- * Returns the current authenticated user's session data.
- * Requires sign-in but does not require an organization.
- */
 app.get('/api/v1/me', requireAuth, (req: Request, res: Response) => {
   const auth = getAuth(req);
 
@@ -99,10 +101,6 @@ app.get('/api/v1/me', requireAuth, (req: Request, res: Response) => {
   res.status(200).json(response);
 });
 
-/**
- * Test endpoint that requires the user to be in an organization.
- * Useful for verifying the requireOrg middleware.
- */
 type WorkspaceContextData = {
   userId: string;
   orgId: string;
@@ -124,10 +122,6 @@ app.get('/api/v1/workspace/context', requireOrg, (req: Request, res: Response) =
   res.status(200).json(response);
 });
 
-/**
- * Test endpoint that requires admin role.
- * Only admins and owners can call this.
- */
 type AdminCheckData = {
   message: string;
   role: string;

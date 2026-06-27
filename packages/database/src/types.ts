@@ -18,23 +18,26 @@ import type { ColumnType, Generated } from 'kysely';
 // Shared column helpers
 // ============================================================
 
-/**
- * A UUID column where the database generates the value on insert.
- * We read it as a string, but never insert or update it manually.
- */
 type GeneratedUUID = Generated<string>;
 
-/**
- * A timestamp column where the database fills it in on insert.
- * Reads as a Date object.
- */
 type GeneratedTimestamp = ColumnType<Date, Date | string | undefined, Date | string>;
 
 // ============================================================
-// Roles (mirrors the role enum we will create in SQL)
+// Enums
 // ============================================================
 
 export type OrganizationRole = 'owner' | 'admin' | 'member' | 'viewer';
+
+export type MeetingStatus =
+  | 'uploading'
+  | 'uploaded'
+  | 'transcribing'
+  | 'transcribed'
+  | 'analyzing'
+  | 'analyzed'
+  | 'embedding'
+  | 'complete'
+  | 'failed';
 
 // ============================================================
 // Tables
@@ -72,6 +75,29 @@ export type OrganizationMembersTable = {
   updated_at: GeneratedTimestamp;
 };
 
+export type MeetingsTable = {
+  id: GeneratedUUID;
+  organization_id: string;
+  uploaded_by: string;
+
+  title: string;
+  status: ColumnType<MeetingStatus, MeetingStatus | undefined, MeetingStatus>;
+
+  file_name: string;
+  file_size_bytes: ColumnType<string, number | string, number | string>;
+  file_mime_type: string;
+  storage_path: string;
+
+  duration_seconds: number | null;
+  error_message: string | null;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  metadata: ColumnType<Record<string, any>, Record<string, any> | undefined, Record<string, any>>;
+
+  uploaded_at: GeneratedTimestamp | null;
+  created_at: GeneratedTimestamp;
+  updated_at: GeneratedTimestamp;
+};
+
 // ============================================================
 // Master database type
 // ============================================================
@@ -89,4 +115,5 @@ export type Database = {
   users: UsersTable;
   organizations: OrganizationsTable;
   organization_members: OrganizationMembersTable;
+  meetings: MeetingsTable;
 };

@@ -13,5 +13,7 @@ export type {
   UsersTable,
   OrganizationsTable,
   OrganizationMembersTable,
+  MeetingsTable,
   OrganizationRole,
+  MeetingStatus,
 } from './types.js';

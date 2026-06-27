@@ -64,4 +64,56 @@ export const apiClient = {
   delete: <T>(path: string, token?: string) => request<T>(path, { method: 'DELETE', token }),
 };
 
+/**
+ * Uploads a file directly to a pre-signed URL with progress tracking.
+ *
+ * Used for browser → Supabase direct uploads. The signed URL already
+ * includes authorization, so no token is sent.
+ *
+ * Returns a promise that resolves when the upload completes.
+ * The onProgress callback fires repeatedly with values 0-100.
+ */
+export function uploadToSignedUrl(
+  signedUrl: string,
+  file: File,
+  options?: { onProgress?: (percent: number) => void; signal?: AbortSignal },
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+
+    xhr.upload.addEventListener('progress', (event) => {
+      if (event.lengthComputable && options?.onProgress) {
+        const percent = Math.round((event.loaded / event.total) * 100);
+        options.onProgress(percent);
+      }
+    });
+
+    xhr.addEventListener('load', () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        resolve();
+      } else {
+        reject(
+          new ApiError('UPLOAD_FAILED', `Upload failed with status ${xhr.status}`, xhr.status),
+        );
+      }
+    });
+
+    xhr.addEventListener('error', () => {
+      reject(new ApiError('UPLOAD_NETWORK_ERROR', 'Network error during upload', 0));
+    });
+
+    xhr.addEventListener('abort', () => {
+      reject(new ApiError('UPLOAD_ABORTED', 'Upload was cancelled', 0));
+    });
+
+    if (options?.signal) {
+      options.signal.addEventListener('abort', () => xhr.abort());
+    }
+
+    xhr.open('PUT', signedUrl);
+    xhr.setRequestHeader('Content-Type', file.type);
+    xhr.send(file);
+  });
+}
+
 export { ApiError };
